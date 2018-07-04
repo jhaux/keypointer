@@ -1,2 +1,5 @@
 **.swp
 **.egg-info
+**test_data**
+**__pycache__**
+build**

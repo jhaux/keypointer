@@ -10,6 +10,7 @@ from tqdm import tqdm, trange
 
 
 PATH_TO_OPENPOSE = '/export/home/jhaux/NIPS18/Patrick/evaluations/openpose'
+CVD = 1
 
 N_PERSON = 1
 
@@ -22,8 +23,8 @@ def istype(filename, types):
     ``types``.'''
 
     if not os.path.isdir(filename):
-        ending = filename.slpit('.')[-1]
-        if ending is in types:
+        ending = filename.split('.')[-1]
+        if ending in types:
             return True
     return False
 
@@ -38,7 +39,7 @@ def isvideo(filename):
     return istype(filename, VIDEO_TYPES)
 
 
-def video_to_keypoints(video_file
+def video_to_keypoints(video_file,
                        clean_json=True,
                        clean_images=False):
     '''calculates Person keypoints per frame for a given video.
@@ -48,7 +49,8 @@ def video_to_keypoints(video_file
             a folder, either all videos in the folder are converted or each
             image in the folder is interpreted as a frame in one video.
         clean_json (bool): Delete generated json files
-        clean_images (bool): Delete generated image files
+        clean_images (bool): Delete generated image files. Ignored if
+            video_file is the path to an image directory.
     '''
 
     if isvideo(video_file):
@@ -60,25 +62,55 @@ def video_to_keypoints(video_file
         has_videos = any([isvideo(f) for f in files])
         assert (has_images and not has_videos) \
                 or (not has_images and has_videos), \
-                raise ValueError('The directory at video_file should either '
-                    'only contain videos or images, but not both.')
+                'The directory at video_file should either ' \
+                    'only contain videos or images, but not both.'
 
-        if has_images:
-            path_to_frames = video_file
         if has_videos:
-            videos = filter(lambda f: isvideo(f), files)
-            for video in tqdm(videos, descr='video'):
-                kp, c = video_to_keypoints(os.path.join(root, video))
+            videos = list(filter(lambda f: isvideo(f), files))
+            print('Processing the following videos:')
+            for v in videos:
+                print('-', v)
+            keypoint_files = []
+            confidence_files = []
+            for video in tqdm(videos, desc='video'):
+                print('Processing {}'.format(video))
+                kp, c, j = video_to_keypoints(os.path.join(video_file, video))
+                keypoint_files += [kp]
+                confidence_files += [c]
+
+            print('')
+            return keypoint_files, confidence_files
+        else:
+            path_to_frames = os.path.abspath(video_file)
+            clean_images = False
     else:
         raise ValueError('video_file need to be a path leading to a video '
                 + '(file ending with {}) '.format(VIDEO_TYPES)
                 + 'or leading to a folder full of images/videos, '
                 + 'but is {}'.format(video_file))
 
-    kp_path, conf_path = keypoints_from_images(path_to_frames)
+    kp_path, conf_path, json_path = keypoints_from_images(path_to_frames)
+
+    if clean_json:
+        clean(json_path, '.json')
+    if clean_images:
+        clean(path_to_frames, '.jpg')
 
     return kp_path, conf_path
 
+
+def clean(directory, ending='.json'):
+    '''Removes all json and images files in the given directory.'''
+    
+    files = os.listdir(directory)
+    files_to_clean = filter(lambda f: ending == f.split('.')[-1], files)
+
+    for f in files_to_clean:
+        os.remove(os.path.join(directory, f))
+
+    files = os.listdir(directory)
+    if len(files) == 0:
+        os.rmdir(directory)
 
 def video_to_images(path_to_video):
     '''Converts a video to a set of images, stored in a subdirectory of the
@@ -92,20 +124,25 @@ def video_to_images(path_to_video):
     '''
 
     # Make a directory where to store the frames
-    parent_dir, video_name = os.path.split(path_to_video)
+    parent_dir, video_name = os.path.split(os.path.abspath(path_to_video))
     video_name = video_name.split('.')[0]
     image_dir = os.path.join(parent_dir, video_name+'_frames')
 
-    os.mkdir(image_dir)
+    try:
+        os.mkdir(image_dir)
+    except FileExistsError as e:
+        pass
 
     video = cv2.VideoCapture(path_to_video)
 
     number_of_frames = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-    for frame in trange(number_of_frames, descr='frame'):
+    for frame in trange(number_of_frames, desc='frame'):
         success, image = video.read()
         if not success:
             break
-        cv2.imwrite('{}_{}.jpg'.format(frame, video_name))
+        image_name = '{}_{}.jpg'.format(frame, video_name)
+        cv2.imwrite(os.path.join(image_dir, image_name), image)
+    print('')
 
     print('Converted {} to {}/{} frames stored at {}'
             .format(video_name, frame, number_of_frames, image_dir))
@@ -126,14 +163,15 @@ def keypoints_from_images(path_to_frames):
             each frame.
     '''
 
-    path_of_json_files = calculateKeypoints(path_to_frames)
+    path_of_json_files = calculateKeypoints(path_to_frames, CVD)
     
     jsons = os.listdir(path_of_json_files)
     jsons = sorted(jsons, key=lambda n: int(n.split('_')[0]))
 
     all_keypoints = []
     confidences = []
-    for json_frame in tqdm(jsons, descr='reading json'):
+    for json_frame in tqdm(jsons, desc='reading json files'):
+        json_frame = os.path.join(path_of_json_files, json_frame)
         with open(json_frame, 'r') as kp_file:
             keypoints = json.loads(kp_file.read())
 
@@ -158,6 +196,7 @@ def keypoints_from_images(path_to_frames):
                 all_keypoints += [person_keypoints]
                 confidences += [person_confidences]
 
+    print('')
     all_keypoints = np.stack(all_keypoints, axis=0)
     confidences = np.stack(confidences, axis=0)
 
@@ -167,7 +206,7 @@ def keypoints_from_images(path_to_frames):
     np.save(keypoint_file, all_keypoints)
     np.save(confidence_file, confidences)
 
-    return keypoint_file, confidence_file
+    return keypoint_file, confidence_file, path_of_json_files
 
 
 def calculateKeypoints(root,
@@ -195,46 +234,60 @@ def calculateKeypoints(root,
     '''.format(pto=PATH_TO_OPENPOSE)
 
     # Interpret gpu device
-    cvd = '' if cvd is None else str(cvd)
+    cvd = '0' if cvd is None else str(cvd)
+    num_gpu = 1
 
     json_path = os.path.join(root, write_json)
+
+    print('\nRUNNING OPENPOSE. THIS CAN TAKE A WHILE\n')
 
     # run openpose
     os.system('cd {};'.format(pto)
               + 'CUDA_VISIBLE_DEVICES={} '.format(cvd)
               + '   ./build/examples/openpose/openpose.bin '
-              + '   -image_dir {} '.format(root)
-              + '   -write_json {} '.format(json_path)
+              + '   -image_dir \"{}\" '.format(root)
+              + '   -write_json \"{}\" '.format(json_path)
               + '   -keypoint_scale 3'  # [-1, 1]
-              + '   -number_people_max {}'.format(n_persons)
-              + '   -num_gpu 1'
+              + '   -number_people_max {}'.format(n_persons) 
+              # + '   -num_gpu {}'.format(num_gpu)
               + '   -display 0'
-              + '   -render_pose 1')
+              # + '   -render_pose 1')
+              )
 
     return json_path
 
 
 if __name__ == '__main__':
+    import keypointer
     from argparse import ArgumentParser
 
-    P = argparse.ArgumentParser()
+    P = ArgumentParser()
 
     P.add_argument('--v', type=str, default='.',
                    help='Path to the video(s) or the images to parse.')
     P.add_argument('--ci', action='store_true', default=False,
                    help='If this flag is set, all generated images will be '
                         'deleted after the keypoints are generated.')
-    P.add_argument('--cj', action='store_true', default=False,
+    P.add_argument('--cj', action='store_true', default=True,
                    help='If this flag is set, all generated json files will '
                         'be deleted after the keypoints are generated.')
     P.add_argument('--np', type=int, default=1,
                    help='Maximum number of persons to detect in the video(s)')
+    P.add_argument('-cvd', type=int, default=None,
+                   help='Index of GPU to do the computations on.')
 
     args = P.parse_args()
 
     vp = args.v
     clear_i = args.ci
     clear_j = args.cj
+    CVD = args.cvd
+
 
     kp_path, c_path = video_to_keypoints(vp, clear_j, clear_i)
-    print('Generated keypoints can be found at {}.'.format(kp_path))
+    print('Generated keypoints can be found at:')
+    if isinstance(kp_path, str):
+        print('- {}.'.format(kp_path))
+    else:
+        for kp in kp_path:
+            print('- {}.'.format(kp))

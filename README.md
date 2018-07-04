@@ -9,9 +9,15 @@ cleans up afterweards, if wished.
 Installation:
 -------------
 
+Navigate to this repository.
 This will install the tool `vid_to_key` and link it to `$HOME/.local/bin`:
 ```
 pip install -e .
+```
+
+If you cannot find the executable `vid_to_key` afterwards try the following:
+```
+python setup.py install
 ```
 
 Now it can be called from anywhere on you system. If you installed it in a
@@ -19,6 +25,8 @@ virtualenv, make sure to start the virtualenv before calling the script.
 
 Example usage:
 --------------
+
+*If run on hci servers needs to be run on hcigpu01!*
 
 This will extract keypoints from all videos or images inside the folder:
 ```
