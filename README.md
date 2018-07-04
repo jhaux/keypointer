@@ -26,7 +26,7 @@ virtualenv, make sure to start the virtualenv before calling the script.
 Example usage:
 --------------
 
-*If run on hci servers needs to be run on hcigpu01!*
+**_If run on hci servers needs to be run on hcigpu01!_**
 
 This will extract keypoints from all videos or images inside the folder:
 ```
