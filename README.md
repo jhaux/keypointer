@@ -14,8 +14,10 @@ This will install the tool `vid_to_key` and link it to `$HOME/.local/bin`:
 ```
 pip install -e .
 ```
+Add ``-vvv`` flag to see all installation outputs.
 
-If you cannot find the executable `vid_to_key` afterwards try the following:
+If you cannot find the executable `vid_to_key` afterwards and/or adding
+``-vvv`` does not produce an output line ``linking script``, try the following:
 ```
 python setup.py install
 ```
@@ -28,10 +30,11 @@ Example usage:
 
 **_If run on hci servers needs to be run on hcigpu01!_**
 
-This will extract keypoints from all videos or images inside the folder:
+This will extract keypoints from all videos or images inside the folder using
+the gpu with index 1:
 ```
 cd /path/to/where_my_video_is/
-vid_to_key
+vid_to_key -cvd 1
 ```
 It is equivalent to:
 ```
