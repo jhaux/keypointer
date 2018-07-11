@@ -15,34 +15,37 @@ def my_thing():
     # Make executable
     os.system('chmod +x \"{}\"'.format(script_path))
 
-    link_path = '$HOME/.local/bin/vid_to_key'
+    if "VIRTUAL_ENV" in os.environ:
+        link_path = os.path.join(os.environ["VIRTUAL_ENV"], "bin", "vid_to_key")
+    elif os.path.exists(os.path.join(os.environ["HOME"], ".local/bin")):
+        link_path = os.path.join(os.environ["HOME"], ".local/bin/vid_to_key")
 
     # Link script somwhere, where PATH is pointing
     os.system('ln -s \"{}\" \"{}\"'.format(script_path, link_path))
+    # TODO clean up when uninstalling?
 
 
 class PostInstallCommand(install):
-    '''Does not work'''
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def run(self):
         install.run(self)
-        my_thing()
+        # no need to run again - already in PostEggCommand
+        #my_thing()
 
 
 class PostDevelopCommand(develop):
-    '''Does not work'''
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def run(self):
         develop.run(self)
-        my_thing()
+        # no need to run again - already in PostEggCommand
+        #my_thing()
 
 
 class PostEggCommand(egg_info):
-    '''Does not work'''
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
