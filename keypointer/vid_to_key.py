@@ -164,14 +164,31 @@ def keypoints_from_images(path_to_frames):
     '''
 
     path_of_json_files = calculateKeypoints(path_to_frames, CVD)
+
+    return json_to_numpy(path_to_json_files)
     
-    jsons = os.listdir(path_of_json_files)
+
+def json_to_numpy(path_to_json_files):
+    '''Converts a set of sortable json files into one numpy array.
+    
+    Args:
+        path_to_json_files: Directory containing all json files.
+            Must be named INDEX_SOMETHING.json 
+            Directory must only contain json files.
+
+    Returns:
+        str: path to keypoint_file
+        str: path to confidence_file
+        str: path of json files
+    '''
+    jsons = os.listdir(path_to_json_files)
     jsons = sorted(jsons, key=lambda n: int(n.split('_')[0]))
 
     all_keypoints = []
     confidences = []
-    for json_frame in tqdm(jsons, desc='reading json files'):
-        json_frame = os.path.join(path_of_json_files, json_frame)
+    missed = []
+    for json_frame_ in tqdm(jsons, desc='reading json files'):
+        json_frame = os.path.join(path_of_json_files, json_frame_)
         with open(json_frame, 'r') as kp_file:
             keypoints = json.loads(kp_file.read())
 
@@ -195,6 +212,15 @@ def keypoints_from_images(path_to_frames):
 
                 all_keypoints += [person_keypoints]
                 confidences += [person_confidences]
+            else:
+                all_keypoints += [np.zeros([18, 3])]
+                confidences += [np.zeros([18, 3])]
+                missed += [json_frame_]
+
+    if len(missed) > 0:
+        print('The following json files contained no keypoints:')
+        for m in missed:
+            print(m)
 
     print('')
     all_keypoints = np.stack(all_keypoints, axis=0)
